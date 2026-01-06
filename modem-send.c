@@ -101,12 +101,12 @@ int main(int argc, char **argv)
 	// open the serial port
 	int ser_fd = open(dev_name, O_RDWR | O_NOCTTY);
 	if (ser_fd == -1)
-		err(EXIT_FAILURE, "cannot open device: %s", dev_name);
+		errx(-EXIT_FAILURE, "cannot open device: %s", dev_name);
 
 	// get the current attributes of the serial port
 	struct termios tio;
 	if (tcgetattr(ser_fd, &tio) == -1)
-		err(EXIT_FAILURE, "cannot get line attributes");
+		errx(-EXIT_FAILURE, "cannot get line attributes");
 
 	// set the new attributes
 	tio.c_iflag = 0;
@@ -118,22 +118,27 @@ int main(int argc, char **argv)
 
 	// set the speed of the serial line
 	if (cfsetospeed(&tio, line_speed) < 0 || cfsetispeed(&tio, line_speed) < 0)
-		err(EXIT_FAILURE, "cannot set line speed");
+		errx(-EXIT_FAILURE, "cannot set line speed");
 
 	// set the attributes
 	if (tcsetattr(ser_fd, TCSANOW, &tio) == -1)
-		err(EXIT_FAILURE, "cannot set line attributes");
+		errx(-EXIT_FAILURE, "cannot set line attributes");
 
 	// send the AT command to the modem
-	const char *command = argv[optind];
+	int cmd_len = strlen(argv[optind]);
+	if (cmd_len > 4094)
+		errx(-EXIT_FAILURE, "command to long, max length 4094");
+	char command[4096] = { 0 };
+	memcpy(command, argv[optind], cmd_len);
+	command[cmd_len++] = '\r';
+	command[cmd_len] = 0;
 	if (do_verbose)
 		printf(">> %s\n", command);
 
 	// send the command to the modem
-	int send = strlen(command);
-	int wrote = write(ser_fd, command, send);
-	if (wrote != send)
-		err(EXIT_FAILURE, "couldn't write command to the modem");
+	int wrote = write(ser_fd, command, cmd_len);
+	if (wrote != cmd_len)
+		errx(-EXIT_FAILURE, "couldn't write command to the modem");
 
 	// read the response of the modem
 	char in_buffer[4096] = { 0 };
