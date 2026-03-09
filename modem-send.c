@@ -32,13 +32,14 @@ int main(int argc, char **argv)
 {
 	// parse the command line options
 	int do_verbose = 0;
+	int receive_urcs = 0;
 	int timeout_ms = 1000;
 	int baudrate = 115200;
 	int line_speed = B115200;
 	const char *dev_name = "/dev/ttymdmAT1";
 
 	int opt = 0;
-	while ((opt = getopt(argc, argv, "b:d:t:v")) != -1)
+	while ((opt = getopt(argc, argv, "b:d:t:uv")) != -1)
 	{
 		switch (opt)
 		{
@@ -73,6 +74,11 @@ int main(int argc, char **argv)
 
 			// convert to milliseconds
 			timeout_ms *= 1000;
+		} break;
+
+		case 'u':
+		{
+			receive_urcs = 1;
 		} break;
 
 		case 'v':
@@ -141,30 +147,42 @@ int main(int argc, char **argv)
 		errx(-EXIT_FAILURE, "couldn't write command to the modem");
 
 	// read the response of the modem
-	char in_buffer[4096] = { 0 };
-	int size = read(ser_fd, in_buffer, sizeof(in_buffer));
-	if (size < 0)
+	int received_ok = 0;
+	do
 	{
-		errx(-EXIT_FAILURE, "failed to read from modem");
-	}
-	else if (size == 0)
-	{
-		errx(-EXIT_FAILURE, "no response from modem");
-	}
-	else
-	{
-		if (do_verbose)
-			printf("<< %s", in_buffer);
+		// read a response from the modem
+		char in_buffer[4096] = { 0 };
+		int size = read(ser_fd, in_buffer, sizeof(in_buffer) - 1);
+		if (size < 0)
+		{
+			errx(-EXIT_FAILURE, "failed to read from modem");
+		}
+		else if (size == 0)
+		{
+			if (! receive_urcs)
+				errx(-EXIT_FAILURE, "no response from modem");
+		}
 		else
-			printf("%s", in_buffer);
-	}
+		{
+			// output the response
+			if (do_verbose)
+				printf("<< %s", in_buffer);
+			else
+				printf("%s", in_buffer);
 
-	return (strstr(in_buffer, "\r\nOK\r") != NULL)
+			// check if we received an OK response
+			received_ok |= (strstr(in_buffer, "\r\nOK\r") != NULL);
+		}
+	}
+	while (receive_urcs);
+
+	return (received_ok)
 			? EXIT_SUCCESS
 			: -EXIT_FAILURE;
 
 print_usage:
-	printf("usage: %s [-t timeout_seconds] [-b baudrate] [-d /dev/ttymdmAT1] command\r\n", argv[0]);
+	printf("usage: %s [-t timeout_seconds] [-b baudrate] [-d /dev/ttymdmAT1] [-u] command\r\n", argv[0]);
+	printf("    -u tries to keep reading (URC's) until ^C is received\r\n");
 
 	return -EXIT_FAILURE;
 }
