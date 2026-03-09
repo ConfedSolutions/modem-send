@@ -148,6 +148,7 @@ int main(int argc, char **argv)
 
 	// read the response of the modem
 	int received_ok = 0;
+	int received_end = 0;
 	do
 	{
 		// read a response from the modem
@@ -170,11 +171,13 @@ int main(int argc, char **argv)
 			else
 				printf("%s", in_buffer);
 
-			// check if we received an OK response
+			// check if we received an OK or ERROR response
 			received_ok |= (strstr(in_buffer, "\r\nOK\r") != NULL);
+			received_end |= received_ok
+					|| (strstr(in_buffer, "\r\nERROR\r") != NULL);
 		}
 	}
-	while (receive_urcs);
+	while (receive_urcs || ! received_end);
 
 	return (received_ok)
 			? EXIT_SUCCESS
